@@ -120,6 +120,8 @@
   tr.completed td { color: var(--completed); }
   tr.completed .tag { background: #eef0f4; }
   tr.bedtime td { font-weight: 700; }
+  tr.window-row td { color: var(--muted); font-size: 0.82rem; font-style: italic; padding-top: 2px; padding-bottom: 2px; border-bottom: none; }
+  tr.window-row.completed td { color: #b7bac2; }
   .tag {
     display: inline-block;
     font-size: 0.72rem;
@@ -772,20 +774,41 @@ function renderOutput(result){
 
   html += warnings.map(w => `<div class="warn-box">${escapeHtml(w)}</div>`).join("");
 
-  html += `<div class="card"><div class="section-title">Suggested Schedule</div>`;
-  html += `<table class="schedule"><thead><tr><th>Event</th><th>Time</th><th>Duration</th><th></th></tr></thead><tbody>`;
-  html += `<tr class="completed"><td>Wake</td><td>${fmtClock(primary.wakeMin)}</td><td>&mdash;</td><td><span class="tag">Actual</span></td></tr>`;
+  // Build the full event timeline so wake-window durations can be interleaved between rows.
+  const timeline = [];
+  timeline.push({ label: "Wake", point: primary.wakeMin, completed: true, tag: "Actual" });
   primary.naps.forEach((n,i) => {
-    html += `<tr class="completed"><td>${NAP_LABELS[i]}</td><td>${fmtClock(n.startMin)}&ndash;${fmtClock(n.endMin)}</td><td>${fmtDuration(n.endMin-n.startMin)}</td><td><span class="tag">${n.inProgress ? "In progress (est.)" : "Completed"}</span></td></tr>`;
+    timeline.push({ label: NAP_LABELS[i], start: n.startMin, end: n.endMin, completed: true,
+      tag: n.inProgress ? "In progress (est.)" : "Completed" });
   });
   primary.remainingNaps.forEach(n => {
-    html += `<tr><td>${NAP_LABELS[n.index]}</td><td>${fmtClock(n.startMin)}&ndash;${fmtClock(n.endMin)}</td><td>${fmtDuration(n.duration)}</td><td><span class="tag">Suggested</span></td></tr>`;
+    timeline.push({ label: NAP_LABELS[n.index], start: n.startMin, end: n.endMin, completed: false, tag: "Suggested" });
   });
   let bedNote = "";
   if(form.goalBedMin !== null && Math.abs(primary.bedDelta) > 2){
     bedNote = ` (${primary.bedDelta>0?"+":"-"}${fmtDuration(Math.abs(primary.bedDelta))} vs goal)`;
   }
-  html += `<tr class="bedtime"><td>Bedtime</td><td>${fmtClock(primary.bedtimeMin)}${bedNote}</td><td>&mdash;</td><td><span class="tag">Suggested</span></td></tr>`;
+  timeline.push({ label: "Bedtime", point: primary.bedtimeMin, completed: false, tag: "Suggested", note: bedNote, bedtime: true });
+
+  html += `<div class="card"><div class="section-title">Suggested Schedule</div>`;
+  html += `<table class="schedule"><thead><tr><th>Event</th><th>Time</th><th>Duration</th><th></th></tr></thead><tbody>`;
+  timeline.forEach((ev,i) => {
+    const rowClass = ev.bedtime ? "bedtime" : (ev.completed ? "completed" : "");
+    const timeStr = ev.point !== undefined
+      ? fmtClock(ev.point) + (ev.note || "")
+      : `${fmtClock(ev.start)}&ndash;${fmtClock(ev.end)}`;
+    const durStr = ev.point !== undefined ? "&mdash;" : fmtDuration(ev.end - ev.start);
+    html += `<tr class="${rowClass}"><td>${ev.label}</td><td>${timeStr}</td><td>${durStr}</td><td><span class="tag">${ev.tag}</span></td></tr>`;
+
+    if(i < timeline.length - 1){
+      const next = timeline[i+1];
+      const endOfThis = ev.point !== undefined ? ev.point : ev.end;
+      const startOfNext = next.point !== undefined ? next.point : next.start;
+      const windowDur = startOfNext - endOfThis;
+      const windowCompleted = ev.completed && next.completed;
+      html += `<tr class="window-row${windowCompleted ? " completed" : ""}"><td colspan="2">&#8627; Wake window (${ev.label} &rarr; ${next.label})</td><td>${fmtDuration(windowDur)}</td><td></td></tr>`;
+    }
+  });
   html += `</tbody></table>`;
   html += `<div class="summary-line">${primary.totalNapCount} naps total &middot; ${fmtHours(primary.totalSleep)} daytime sleep &middot; ${fmtHours(primary.totalAwake)} awake time</div>`;
   html += `</div>`;
