@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ben's Sleep Schedule</title>
+<style>
+  :root {
+    --bg: #f6f7fb;
+    --card: #ffffff;
+    --border: #e2e5ec;
+    --text: #23262f;
+    --muted: #6b7280;
+    --accent: #5b6ee8;
+    --accent-dark: #4453c4;
+    --warn-bg: #fff7e6;
+    --warn-border: #f0c36d;
+    --warn-text: #8a5a00;
+    --err-bg: #fdecea;
+    --err-border: #f2b8b5;
+    --err-text: #9c2b26;
+    --completed: #9ca0ab;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px 16px 80px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  header h1 { font-size: 1.4rem; margin: 0; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
+  .gear-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    width: 40px; height: 40px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    margin-bottom: 18px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #444;
+  }
+  .field input[type=text] {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+  }
+  .field input[type=text]:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  .field .hint { font-size: 0.78rem; color: var(--muted); margin-top: 3px; }
+  .nap-row { display: flex; gap: 8px; align-items: flex-start; }
+  .nap-row .field { flex: 1; margin-bottom: 8px; }
+  .inprogress-note {
+    font-size: 0.8rem;
+    color: var(--warn-text);
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin-top: 4px;
+  }
+  .actions { display: flex; gap: 10px; margin-top: 16px; }
+  button.primary {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 11px 22px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button.primary:hover { background: var(--accent-dark); }
+  .error-box {
+    background: var(--err-bg);
+    border: 1px solid var(--err-border);
+    color: var(--err-text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    margin-bottom: 14px;
+  }
+  .warn-box {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    color: var(--warn-text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+    margin-bottom: 14px;
+  }
+  table.schedule { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+  table.schedule th, table.schedule td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+  table.schedule th { color: var(--muted); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; }
+  tr.completed td { color: var(--completed); }
+  tr.completed .tag { background: #eef0f4; }
+  tr.bedtime td { font-weight: 700; }
+  .tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 20px;
+    background: #e9ecff;
+    color: var(--accent-dark);
+  }
+  tr.completed .tag { color: #6b7280; }
+  .summary-line {
+    margin-top: 12px;
+    font-size: 0.92rem;
+    color: #444;
+    font-weight: 600;
+  }
+  .alt-card {
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-top: 10px;
+  }
+  .alt-card h4 { margin: 0 0 4px; font-size: 0.88rem; }
+  .alt-card .line { font-size: 0.86rem; color: #444; }
+  .section-title { font-size: 0.95rem; font-weight: 700; margin: 0 0 10px; }
+  /* modal */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(20,22,30,0.45);
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    padding: 30px 12px;
+    z-index: 50;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--card);
+    border-radius: var(--radius);
+    max-width: 640px;
+    width: 100%;
+    padding: 20px 22px 24px;
+  }
+  .modal h2 { margin-top: 0; font-size: 1.15rem; }
+  .modal-close {
+    float: right;
+    background: none; border: none; font-size: 1.3rem; cursor: pointer; color: var(--muted);
+  }
+  .slot-block {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+  }
+  .slot-block h3 { font-size: 0.9rem; margin: 0 0 8px; display:flex; justify-content:space-between; align-items:center; }
+  .slot-block h3 .clear-slot { font-weight:400; font-size:0.78rem; color: var(--accent-dark); cursor:pointer; background:none;border:none; text-decoration:underline; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  select {
+    padding: 7px 8px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9rem; width: 100%;
+  }
+  .windows-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px,1fr)); gap: 8px; margin-top: 8px; }
+  .windows-grid .field label { font-size: 0.72rem; }
+  .modal-actions { display: flex; justify-content: space-between; margin-top: 18px; }
+  .link-btn {
+    background: none; border: none; color: var(--accent-dark); text-decoration: underline; cursor: pointer; font-size: 0.88rem; padding: 0;
+  }
+  footer.note { text-align:center; color: var(--muted); font-size: 0.78rem; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Ben's Sleep Schedule</h1>
+      <p>Log today's actuals, get the rest of the day suggested.</p>
+    </div>
+    <button class="gear-btn" id="openSettings" title="Adjust default schedule template">&#9881;</button>
+  </header>
+
+  <div class="card">
+    <div class="field">
+      <label for="wakeTime">Morning Wake Time</label>
+      <input type="text" id="wakeTime" placeholder="7:00am">
+    </div>
+
+    <div id="napFields"></div>
+
+    <div class="field">
+      <label for="goalBedtime">Goal Bedtime <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+      <input type="text" id="goalBedtime" placeholder="7:00pm">
+    </div>
+
+    <div id="formErrors"></div>
+
+    <div class="actions">
+      <button class="primary" id="generateBtn">Generate Schedule</button>
+    </div>
+  </div>
+
+  <div id="output"></div>
+
+  <footer class="note">Settings persist in this browser only (localStorage).</footer>
+</div>
+
+<div class="modal-overlay" id="settingsOverlay">
+  <div class="modal">
+    <button class="modal-close" id="closeSettings">&times;</button>
+    <h2>Adjust Default Schedule Template</h2>
+
+    <h3 style="font-size:0.95rem;">Sample Schedules (up to 4)</h3>
+    <div id="templateSlots"></div>
+
+    <h3 style="font-size:0.95rem;margin-top:20px;">Wake Window Parameter Sets (up to 2)</h3>
+    <div id="windowSlots"></div>
+
+    <div class="modal-actions">
+      <button class="link-btn" id="resetDefaults">Reset to defaults</button>
+      <button class="primary" id="saveSettings">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================= Constants ============================= */
+const NAP_LABELS = ["Nap 1","Nap 2","Nap 3","Nap 4","Nap 5"];
+const AWAKE_MIN_H = 7.5, AWAKE_MAX_H = 8.0;
+const LAST_NAP_MAX_MIN = 45;
+const BEDTIME_TOLERANCE_MIN = 30;
+const DAY_MIN = 6*60, DAY_MAX = 21*60; // 6:00am - 9:00pm daytime window
+
+/* ============================= Defaults ============================= */
+function defaultSettings(){
+  return {
+    templates: [
+      { label: "Template A (7:00pm bedtime)", wake: "7:00am", bed: "7:00pm",
+        naps: [ {start:"8:15am", end:"10:00am"}, {start:"11:30am", end:"12:30pm"},
+                {start:"2:00pm", end:"3:00pm"}, {start:"4:45pm", end:"5:15pm"} ] },
+      { label: "Template B (6:00pm bedtime)", wake: "7:00am", bed: "6:00pm",
+        naps: [ {start:"8:15am", end:"9:15am"}, {start:"10:45am", end:"11:30am"},
+                {start:"1:00pm", end:"2:00pm"}, {start:"3:45pm", end:"4:15pm"} ] },
+      null,
+      null
+    ],
+    windowSets: [
+      { label: "4-nap pattern", napCount: 4, windows: [1.25,1.5,1.5,1.75,1.75] },
+      null
+    ]
+  };
+}
+
+let settings = loadSettings();
+
+function loadSettings(){
+  try {
+    const raw = localStorage.getItem("sleepScheduleSettings");
+    if(!raw) return defaultSettings();
+    const parsed = JSON.parse(raw);
+    if(!parsed.templates || !parsed.windowSets) return defaultSettings();
+    return parsed;
+  } catch(e){ return defaultSettings(); }
+}
+function saveSettingsToStorage(){
+  localStorage.setItem("sleepScheduleSettings", JSON.stringify(settings));
+}
+
+/* ============================= Time parsing ============================= */
+// Parses a single clock token like "7:00am", "7am", "14:00", "12:30" (ambiguous).
+function parseClockToken(token){
+  if(!token) return null;
+  token = token.trim().toLowerCase();
+  const m = token.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+  if(!m) return null;
+  let hour = parseInt(m[1],10);
+  let minute = m[2] ? parseInt(m[2],10) : 0;
+  const meridiem = m[3] || null;
+  if(minute > 59) return null;
+  if(!meridiem && hour > 12) {
+    // 24-hour style, e.g. "14:00"
+    if(hour > 23) return null;
+    return { direct: hour*60 + minute };
+  }
+  if(hour === 0 || hour > 12) return null;
+  if(meridiem){
+    const base = (hour % 12) * 60 + minute;
+    return { direct: meridiem === "pm" ? base + 720 : base };
+  }
+  return { hour, minute };
+}
+
+// Resolves a token to minutes-of-day, using hintMin (previous event, minutes)
+// to disambiguate am/pm when not explicit. Falls back to the 6am-9pm daytime window.
+function resolveTime(token, hintMin){
+  const parsed = parseClockToken(token);
+  if(!parsed) return null;
+  if(parsed.direct !== undefined) return parsed.direct;
+  const am = (parsed.hour % 12) * 60 + parsed.minute;
+  const pm = am + 720;
+  const inDay = m => m >= DAY_MIN && m <= DAY_MAX;
+  let candidates = [am, pm].filter(inDay);
+  if(candidates.length === 0) candidates = [am, pm];
+  if(hintMin !== null && hintMin !== undefined){
+    const after = candidates.filter(m => m >= hintMin - 5);
+    if(after.length) candidates = after;
+  }
+  return Math.min(...candidates);
+}
+
+// Parses "8:30-9:15am" style range. Returns {startMin, endMin, inProgress}.
+function parseTimeRange(str, hintMin){
+  if(!str) return null;
+  str = str.trim().replace(/[–—]/g, "-");
+  if(str === "") return null;
+  const parts = str.split("-");
+  if(parts.length === 1){
+    const startMin = resolveTime(parts[0], hintMin);
+    if(startMin === null) return { error: true };
+    return { startMin, endMin: null, inProgress: true };
+  }
+  const left = parts[0].trim();
+  const right = parts.slice(1).join("-").trim();
+  const startMin = resolveTime(left, hintMin);
+  if(startMin === null) return { error: true };
+  const endMin = resolveTime(right, startMin);
+  if(endMin === null) return { error: true };
+  return { startMin, endMin, inProgress: false };
+}
+
+function fmtClock(min){
+  min = Math.round(min);
+  let h = Math.floor(min/60) % 24;
+  const mm = ((min%60)+60)%60;
+  const mer = h >= 12 ? "pm" : "am";
+  let h12 = h % 12; if(h12 === 0) h12 = 12;
+  return h12 + ":" + String(mm).padStart(2,"0") + mer;
+}
+function fmtDuration(min){
+  min = Math.round(min);
+  const h = Math.floor(min/60), m = min%60;
+  if(h === 0) return m + "m";
+  if(m === 0) return h + "h";
+  return h + "h " + m + "m";
+}
+function fmtHours(min){
+  return (min/60).toFixed(1) + " hrs";
+}
+
+/* ============================= Template derivation ============================= */
+// Converts a stored template (strings) into minute-based derived data.
+function deriveTemplate(tpl){
+  const wakeMin = resolveTime(tpl.wake, null);
+  const bedMin = resolveTime(tpl.bed, wakeMin);
+  let prev = wakeMin;
+  const naps = [];
+  for(const n of tpl.naps){
+    const s = resolveTime(n.start, prev);
+    const e = resolveTime(n.end, s);
+    naps.push({ startMin: s, endMin: e, duration: e - s });
+    prev = e;
+  }
+  const windows = [];
+  prev = wakeMin;
+  for(const n of naps){ windows.push(n.startMin - prev); prev = n.endMin; }
+  windows.push(bedMin - prev); // final window before bed
+  const totalAwake = windows.reduce((a,b)=>a+b,0);
+  const totalSleep = naps.reduce((a,b)=>a+b.duration,0);
+  return {
+    label: tpl.label, wakeMin, bedMin, naps, windows,
+    napCount: naps.length,
+    totalAwake, totalSleep,
+    dayLength: bedMin - wakeMin
+  };
+}
+
+function configuredTemplates(){
+  return settings.templates.filter(t => t && t.wake && t.bed && t.naps && t.naps.length>0).map(deriveTemplate);
+}
+function configuredWindowSets(){
+  return settings.windowSets.filter(w => w && w.windows && w.windows.length>0)
+    .map(w => ({ label: w.label, napCount: w.napCount, windows: w.windows.map(h=>h*60) }));
+}
+
+/* ============================= Anchor selection ============================= */
+function pickAnchor(goalBedMin){
+  const templates = configuredTemplates();
+  if(templates.length === 0) return null;
+  if(goalBedMin === null || templates.length === 1){
+    return { primary: templates[0], secondary: null, weight: 1 };
+  }
+  const sorted = templates.slice().sort((a,b)=>a.bedMin-b.bedMin);
+  if(goalBedMin <= sorted[0].bedMin) return { primary: sorted[0], secondary: null, weight: 1 };
+  if(goalBedMin >= sorted[sorted.length-1].bedMin) return { primary: sorted[sorted.length-1], secondary: null, weight: 1 };
+  for(let i=0;i<sorted.length-1;i++){
+    const lower = sorted[i], upper = sorted[i+1];
+    if(goalBedMin >= lower.bedMin && goalBedMin <= upper.bedMin){
+      if(lower.napCount !== upper.napCount){
+        // can't blend different nap-count templates; use nearer one by bedtime distance
+        const nearer = (goalBedMin - lower.bedMin) <= (upper.bedMin - goalBedMin) ? lower : upper;
+        return { primary: nearer, secondary: null, weight: 1 };
+      }
+      const t = (goalBedMin - lower.bedMin) / (upper.bedMin - lower.bedMin);
+      return { primary: lower, secondary: upper, weight: t };
+    }
+  }
+  return { primary: sorted[0], secondary: null, weight: 1 };
+}
+
+function blendedNapDurations(anchor){
+  const { primary, secondary, weight } = anchor;
+  if(!secondary) return primary.naps.map(n=>n.duration);
+  return primary.naps.map((n,i)=> n.duration + (secondary.naps[i].duration - n.duration)*weight);
+}
+
+function pickWindowSet(napCount, fallbackWindowsMin){
+  const sets = configuredWindowSets();
+  const match = sets.find(s => s.napCount === napCount);
+  if(match && match.windows.length === napCount+1) return match.windows;
+  return fallbackWindowsMin;
+}
+
+/* ============================= Form parsing ============================= */
+function readForm(){
+  const wakeStr = document.getElementById("wakeTime").value.trim();
+  const errors = [];
+  if(!wakeStr){ errors.push("Morning wake time is required."); return { errors }; }
+  const wakeMin = resolveTime(wakeStr, null);
+  if(wakeMin === null){ errors.push("Couldn't understand the wake time. Try e.g. 7:00am."); return { errors }; }
+
+  const napInputs = [];
+  for(let i=0;i<5;i++){
+    const el = document.getElementById("nap"+i);
+    napInputs.push(el ? el.value.trim() : "");
+  }
+  const endInputs = [];
+  for(let i=0;i<5;i++){
+    const el = document.getElementById("napEnd"+i);
+    endInputs.push(el ? el.value.trim() : "");
+  }
+
+  const filledFlags = napInputs.map(v => v !== "");
+  const firstBlank = filledFlags.indexOf(false);
+  const lastFilledIdx = filledFlags.lastIndexOf(true);
+  if(firstBlank !== -1 && lastFilledIdx > firstBlank){
+    errors.push(`Please fill naps in order — ${NAP_LABELS[firstBlank]} is blank but ${NAP_LABELS[lastFilledIdx]} has a time.`);
+    return { errors };
+  }
+
+  const completedCount = firstBlank === -1 ? 5 : firstBlank;
+  const naps = [];
+  let hint = wakeMin;
+  for(let i=0;i<completedCount;i++){
+    const range = parseTimeRange(napInputs[i], hint);
+    if(!range || range.error){
+      errors.push(`Couldn't understand the time for ${NAP_LABELS[i]}.`);
+      return { errors };
+    }
+    if(range.inProgress){
+      if(!endInputs[i]){
+        errors.push(`${NAP_LABELS[i]} looks like it's still in progress — please enter its expected end time.`);
+        return { errors };
+      }
+      const endMin = resolveTime(endInputs[i], range.startMin);
+      if(endMin === null){
+        errors.push(`Couldn't understand the expected end time for ${NAP_LABELS[i]}.`);
+        return { errors };
+      }
+      naps.push({ startMin: range.startMin, endMin, inProgress: true });
+      hint = endMin;
+    } else {
+      naps.push({ startMin: range.startMin, endMin: range.endMin, inProgress: false });
+      hint = range.endMin;
+    }
+  }
+
+  let elapsedAwake = 0, elapsedSleep = 0;
+  let prev = wakeMin;
+  for(const n of naps){
+    elapsedAwake += (n.startMin - prev);
+    elapsedSleep += (n.endMin - n.startMin);
+    prev = n.endMin;
+  }
+
+  const goalStr = document.getElementById("goalBedtime").value.trim();
+  let goalBedMin = null;
+  if(goalStr){
+    goalBedMin = resolveTime(goalStr, prev);
+    if(goalBedMin === null){
+      errors.push("Couldn't understand the goal bedtime. Try e.g. 7:00pm.");
+      return { errors };
+    }
+  }
+
+  return { errors: [], wakeMin, naps, completedCount, elapsedAwake, elapsedSleep, lastEventEnd: prev, goalBedMin };
+}
+
+/* ============================= Duration-pattern reshaping ============================= */
+// Reshapes an array of nap-duration weights (length = fromCount) into an array
+// of length toCount, preserving total proportion via contiguous merge/split.
+function reshapeWeights(weights, toCount){
+  if(weights.length === toCount) return weights.slice();
+  if(toCount < weights.length){
+    // merge contiguous groups into toCount groups
+    const groups = Array.from({length:toCount}, ()=>[]);
+    weights.forEach((w,i)=>{
+      const g = Math.min(toCount-1, Math.floor(i * toCount / weights.length));
+      groups[g].push(w);
+    });
+    return groups.map(g => g.reduce((a,b)=>a+b,0));
+  }
+  // split: repeatedly halve the largest entry until we reach toCount entries
+  const arr = weights.slice();
+  while(arr.length < toCount){
+    let maxIdx = 0;
+    for(let i=1;i<arr.length;i++) if(arr[i] > arr[maxIdx]) maxIdx = i;
+    const half = arr[maxIdx]/2;
+    arr.splice(maxIdx, 1, half, half);
+  }
+  return arr;
+}
+
+/* ============================= Candidate schedule generation ============================= */
+function generateCandidate(napCountTry, form, anchor, awakeTargetH){
+  const { wakeMin, naps, completedCount, elapsedAwake, elapsedSleep, lastEventEnd, goalBedMin } = form;
+  if(napCountTry < completedCount) return null; // can't un-happen completed naps
+  if(napCountTry < 3 || napCountTry > 5) return null;
+
+  const fallbackWindows = blendedWindows(anchor, napCountTry);
+  const windows = pickWindowSet(napCountTry, fallbackWindows); // minutes, length napCountTry+1
+  if(!windows || windows.length !== napCountTry+1) return null;
+
+  const napDurationsFull = reshapeWeights(blendedNapDurations(anchor), napCountTry);
+
+  const totalAwakeTargetMin = awakeTargetH * 60;
+  const dayLengthMin = goalBedMin !== null ? (goalBedMin - wakeMin)
+    : (anchor.primary.dayLength + (anchor.secondary ? (anchor.secondary.dayLength - anchor.primary.dayLength)*anchor.weight : 0));
+
+  const remainingCount = napCountTry - completedCount;
+  const remainingSleepTarget = dayLengthMin - totalAwakeTargetMin - elapsedSleep;
+
+  const remainingCapped = { lastNapCapped: false, sleepShortfall: 0 };
+
+  let remainingNaps = [];
+  let bedtimeMin;
+  let prevEnd = lastEventEnd;
+
+  if(remainingCount === 0){
+    // all naps already happened; the entire remaining awake deficit is the final window before bed
+    bedtimeMin = prevEnd + Math.max(0, totalAwakeTargetMin - elapsedAwake);
+    if(napCountTry < 4 && remainingSleepTarget > 20){
+      // stopping below the default nap count while real sleep need remains unmet isn't a real fit —
+      // this should push the search toward more naps, not fewer.
+      remainingCapped.sleepShortfall += remainingSleepTarget;
+    }
+  } else {
+    const remWindowsRaw = windows.slice(completedCount); // length remainingCount+1
+    const rawWinSum = remWindowsRaw.reduce((a,b)=>a+b,0);
+    const desiredRemainingAwake = totalAwakeTargetMin - elapsedAwake;
+    const winScale = rawWinSum > 0 ? Math.max(0, desiredRemainingAwake) / rawWinSum : 1;
+    const remWindows = remWindowsRaw.map(w => w * winScale);
+
+    let remDurations = napDurationsFull.slice(completedCount); // length remainingCount
+    const rawDurSum = remDurations.reduce((a,b)=>a+b,0);
+    const desiredRemainingSleep = Math.max(0, remainingSleepTarget);
+    const durScale = rawDurSum > 0 ? desiredRemainingSleep / rawDurSum : 0;
+    remDurations = remDurations.map(d => d * durScale);
+
+    // enforce last-nap cap, push excess to earlier naps
+    const lastIdx = remDurations.length - 1;
+    if(remDurations[lastIdx] > LAST_NAP_MAX_MIN){
+      const excess = remDurations[lastIdx] - LAST_NAP_MAX_MIN;
+      remDurations[lastIdx] = LAST_NAP_MAX_MIN;
+      if(lastIdx > 0){
+        const earlierSum = remDurations.slice(0,lastIdx).reduce((a,b)=>a+b,0);
+        if(earlierSum > 0){
+          for(let i=0;i<lastIdx;i++) remDurations[i] += excess * (remDurations[i]/earlierSum);
+        } else {
+          remainingCapped.sleepShortfall += excess;
+        }
+      } else {
+        remainingCapped.sleepShortfall += excess;
+      }
+      remainingCapped.lastNapCapped = true;
+    }
+
+    for(let i=0;i<remainingCount;i++){
+      const start = prevEnd + remWindows[i];
+      const end = start + remDurations[i];
+      remainingNaps.push({ startMin: start, endMin: end, duration: remDurations[i], index: completedCount + i });
+      prevEnd = end;
+    }
+    bedtimeMin = prevEnd + remWindows[remWindows.length-1];
+  }
+
+  const totalSleep = elapsedSleep + remainingNaps.reduce((a,b)=>a+b.duration,0);
+  const totalAwake = (bedtimeMin - wakeMin) - totalSleep;
+  const totalNapCount = completedCount + remainingNaps.length;
+
+  const bedDelta = goalBedMin !== null ? (bedtimeMin - goalBedMin) : 0;
+
+  // feasibility
+  let feasible = true;
+  const reasons = [];
+  if(remainingSleepTarget < -5){ feasible = false; reasons.push("no remaining sleep need fits"); }
+  remainingNaps.forEach(n => { if(n.duration < 0){ feasible = false; reasons.push("negative nap duration"); }});
+  if(remainingCapped.sleepShortfall > 20){ feasible = false; reasons.push("last-nap cap can't absorb leftover sleep"); }
+  if(totalAwake/60 < AWAKE_MIN_H - 0.3 || totalAwake/60 > AWAKE_MAX_H + 0.3){ feasible = false; reasons.push("awake time out of range"); }
+
+  return {
+    napCountTry, wakeMin, naps, remainingNaps, bedtimeMin,
+    totalSleep, totalAwake, totalNapCount,
+    bedDelta, feasible, reasons,
+    lastNapCapped: remainingCapped.lastNapCapped,
+    sleepShortfall: remainingCapped.sleepShortfall,
+    awakeTargetH
+  };
+}
+
+function blendedWindows(anchor, napCountTry){
+  const base = anchor.secondary
+    ? anchor.primary.windows.map((w,i)=> w + (anchor.secondary.windows[i]-w)*anchor.weight)
+    : anchor.primary.windows.slice();
+  return reshapeWeights(base, napCountTry+1);
+}
+
+/* ============================= Top-level schedule builder ============================= */
+function buildSchedules(form){
+  const anchor = pickAnchor(form.goalBedMin);
+  if(!anchor){
+    return { error: "No sample schedules configured. Open settings to add at least one." };
+  }
+
+  const defaultAwakeH = configuredWindowSets().find(s=>s.napCount===4)
+    ? configuredWindowSets().find(s=>s.napCount===4).windows.reduce((a,b)=>a+b,0)/60
+    : 7.75;
+
+  function tryCount(napCountTry, awakeTargetH){
+    return generateCandidate(napCountTry, form, anchor, awakeTargetH);
+  }
+
+  // Try default awake target first for nap counts in preference order 4,3,5
+  const order = [4,3,5];
+  let primary = null;
+  const attempts = {};
+  for(const n of order){
+    const c = tryCount(n, defaultAwakeH);
+    attempts[n] = c;
+    if(c && c.feasible){ primary = c; break; }
+  }
+  if(!primary){
+    // widen awake target within band to try to rescue nap count 4
+    for(const h of [AWAKE_MIN_H, AWAKE_MAX_H]){
+      const c = tryCount(4, h);
+      if(c && c.feasible){ primary = c; break; }
+    }
+  }
+  if(!primary){
+    // fall back to whichever attempt is "least infeasible" (first computed, count 4 preferred)
+    primary = attempts[4] || attempts[3] || attempts[5];
+  }
+  if(!primary) return { error: "Couldn't build a schedule from today's inputs — please check the times entered." };
+
+  // Alternates
+  const alternates = [];
+
+  // 1. different nap count that's ALSO feasible
+  for(const n of order){
+    if(n === primary.napCountTry) continue;
+    const c = attempts[n] !== undefined ? attempts[n] : tryCount(n, defaultAwakeH);
+    if(c && c.feasible){
+      alternates.push({ kind: "napcount", schedule: c,
+        title: `${n}-Nap Variation`,
+        desc: `A ${n}-nap version of the day instead of ${primary.napCountTry}.` });
+      break;
+    }
+  }
+
+  // 2. bedtime-precision variant (adjust awake target within band) if goal given and primary has nonzero deviation
+  if(form.goalBedMin !== null && Math.abs(primary.bedDelta) > 2){
+    let best = null;
+    for(const h of [AWAKE_MIN_H, (AWAKE_MIN_H+AWAKE_MAX_H)/2, AWAKE_MAX_H]){
+      const c = tryCount(primary.napCountTry, h);
+      if(c && c.feasible && Math.abs(c.bedDelta) < Math.abs(primary.bedDelta) - 3){
+        if(!best || Math.abs(c.bedDelta) < Math.abs(best.bedDelta)) best = c;
+      }
+    }
+    if(best){
+      alternates.push({ kind: "precision", schedule: best,
+        title: "Closer to Goal Bedtime",
+        desc: "Stretches/compresses awake time slightly to land nearer your goal bedtime." });
+    }
+  }
+
+  // 3. longer/shorter last-nap variant
+  if(primary.remainingNaps.length > 0){
+    const lastNap = primary.remainingNaps[primary.remainingNaps.length-1];
+    const altTarget = lastNap.duration >= LAST_NAP_MAX_MIN - 2 ? 30 : LAST_NAP_MAX_MIN;
+    if(Math.abs(altTarget - lastNap.duration) >= 10){
+      const variant = buildLastNapVariant(primary, form, altTarget);
+      if(variant) alternates.push({ kind:"lastnap", schedule: variant,
+        title: altTarget > lastNap.duration ? "Longer Last Nap" : "Shorter Last Nap",
+        desc: `Final nap ${fmtDuration(altTarget)} instead of ${fmtDuration(lastNap.duration)}, shifting the last wake window.` });
+    }
+  }
+
+  return { primary, alternates: alternates.slice(0,2), form, anchor };
+}
+
+function buildLastNapVariant(primary, form, altLastDuration){
+  if(primary.remainingNaps.length === 0) return null;
+  const naps = primary.remainingNaps.map(n => ({...n}));
+  const diff = altLastDuration - naps[naps.length-1].duration;
+  naps[naps.length-1].duration = altLastDuration;
+  naps[naps.length-1].endMin = naps[naps.length-1].startMin + altLastDuration;
+  const bedtimeMin = primary.bedtimeMin + diff; // sleep total shifts, awake windows unchanged -> bedtime shifts by diff
+  const totalSleep = primary.totalSleep + diff;
+  const totalAwake = primary.totalAwake;
+  return {
+    napCountTry: primary.napCountTry, wakeMin: primary.wakeMin, naps: primary.naps,
+    remainingNaps: naps, bedtimeMin, totalSleep, totalAwake,
+    totalNapCount: primary.totalNapCount,
+    bedDelta: form.goalBedMin !== null ? bedtimeMin - form.goalBedMin : 0,
+    feasible: true, reasons: [], lastNapCapped: altLastDuration>=LAST_NAP_MAX_MIN, sleepShortfall: 0,
+    awakeTargetH: primary.awakeTargetH
+  };
+}
+
+/* ============================= Rendering ============================= */
+function renderNapFields(){
+  const container = document.getElementById("napFields");
+  container.innerHTML = "";
+  for(let i=0;i<5;i++){
+    const wrap = document.createElement("div");
+    wrap.className = "field";
+    wrap.innerHTML = `
+      <label for="nap${i}">${NAP_LABELS[i]} <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+      <input type="text" id="nap${i}" placeholder="8:30-9:15am">
+      <div id="napEndWrap${i}" style="display:none;">
+        <div class="inprogress-note">Looks like this nap is still in progress. Expected end time:</div>
+        <input type="text" id="napEnd${i}" placeholder="9:15am" style="margin-top:4px;width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;">
+      </div>
+    `;
+    container.appendChild(wrap);
+  }
+  for(let i=0;i<5;i++){
+    const input = document.getElementById("nap"+i);
+    input.addEventListener("input", () => {
+      const v = input.value.trim();
+      const hasDash = /[-–—]/.test(v);
+      document.getElementById("napEndWrap"+i).style.display = (v && !hasDash) ? "block" : "none";
+    });
+  }
+}
+
+function renderOutput(result){
+  const out = document.getElementById("output");
+  if(result.error){
+    out.innerHTML = `<div class="error-box">${escapeHtml(result.error)}</div>`;
+    return;
+  }
+  const { primary, alternates, form } = result;
+  let html = "";
+
+  // warnings
+  const warnings = [];
+  if(form.goalBedMin !== null && Math.abs(primary.bedDelta) > BEDTIME_TOLERANCE_MIN){
+    const dir = primary.bedDelta > 0 ? "later than" : "earlier than";
+    warnings.push(`Goal bedtime couldn't be hit within 30 min. Closest achievable bedtime is ${fmtClock(primary.bedtimeMin)} (${fmtDuration(Math.abs(primary.bedDelta))} ${dir} goal) — not enough remaining flexibility in wake/sleep time to close the gap without breaking the awake-time or last-nap rules.`);
+  }
+  if(primary.napCountTry !== 4){
+    warnings.push(`Adjusted to ${primary.napCountTry} naps today instead of the default 4, based on how today's actual times fit the remaining budget.`);
+  }
+  if(primary.sleepShortfall > 5){
+    warnings.push(`Today's nap(s) ran long enough that the remaining naps can't fully absorb the leftover sleep need without exceeding the 45-minute cap on the last nap. The schedule below keeps the cap and accepts a bit less total sleep instead.`);
+  }
+  if(!primary.feasible){
+    warnings.push(`This schedule is a best-effort fit — some constraints (${primary.reasons.join(", ") || "timing"}) couldn't be fully satisfied given today's actuals.`);
+  }
+
+  html += warnings.map(w => `<div class="warn-box">${escapeHtml(w)}</div>`).join("");
+
+  html += `<div class="card"><div class="section-title">Suggested Schedule</div>`;
+  html += `<table class="schedule"><thead><tr><th>Event</th><th>Time</th><th>Duration</th><th></th></tr></thead><tbody>`;
+  html += `<tr class="completed"><td>Wake</td><td>${fmtClock(primary.wakeMin)}</td><td>&mdash;</td><td><span class="tag">Actual</span></td></tr>`;
+  primary.naps.forEach((n,i) => {
+    html += `<tr class="completed"><td>${NAP_LABELS[i]}</td><td>${fmtClock(n.startMin)}&ndash;${fmtClock(n.endMin)}</td><td>${fmtDuration(n.endMin-n.startMin)}</td><td><span class="tag">${n.inProgress ? "In progress (est.)" : "Completed"}</span></td></tr>`;
+  });
+  primary.remainingNaps.forEach(n => {
+    html += `<tr><td>${NAP_LABELS[n.index]}</td><td>${fmtClock(n.startMin)}&ndash;${fmtClock(n.endMin)}</td><td>${fmtDuration(n.duration)}</td><td><span class="tag">Suggested</span></td></tr>`;
+  });
+  let bedNote = "";
+  if(form.goalBedMin !== null && Math.abs(primary.bedDelta) > 2){
+    bedNote = ` (${primary.bedDelta>0?"+":"-"}${fmtDuration(Math.abs(primary.bedDelta))} vs goal)`;
+  }
+  html += `<tr class="bedtime"><td>Bedtime</td><td>${fmtClock(primary.bedtimeMin)}${bedNote}</td><td>&mdash;</td><td><span class="tag">Suggested</span></td></tr>`;
+  html += `</tbody></table>`;
+  html += `<div class="summary-line">${primary.totalNapCount} naps total &middot; ${fmtHours(primary.totalSleep)} daytime sleep &middot; ${fmtHours(primary.totalAwake)} awake time</div>`;
+  html += `</div>`;
+
+  if(alternates.length > 0){
+    html += `<div class="card"><div class="section-title">Alternate Variations</div>`;
+    alternates.forEach(alt => {
+      const s = alt.schedule;
+      const napTimes = s.remainingNaps.map(n => `${NAP_LABELS[n.index]} ${fmtClock(n.startMin)}&ndash;${fmtClock(n.endMin)}`).join(", ");
+      html += `<div class="alt-card">
+        <h4>${escapeHtml(alt.title)}</h4>
+        <div class="line">${escapeHtml(alt.desc)}</div>
+        <div class="line">${napTimes ? napTimes + " &middot; " : ""}Bedtime ${fmtClock(s.bedtimeMin)}</div>
+        <div class="line">${s.totalNapCount} naps &middot; ${fmtHours(s.totalSleep)} sleep &middot; ${fmtHours(s.totalAwake)} awake</div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  out.innerHTML = html;
+}
+
+function escapeHtml(s){
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+/* ============================= Settings modal ============================= */
+function renderSettingsModal(){
+  const tSlots = document.getElementById("templateSlots");
+  tSlots.innerHTML = "";
+  for(let i=0;i<4;i++){
+    tSlots.appendChild(renderTemplateSlot(i));
+  }
+  const wSlots = document.getElementById("windowSlots");
+  wSlots.innerHTML = "";
+  for(let i=0;i<2;i++){
+    wSlots.appendChild(renderWindowSlot(i));
+  }
+}
+
+function renderTemplateSlot(i){
+  const tpl = settings.templates[i];
+  const div = document.createElement("div");
+  div.className = "slot-block";
+  const napCount = tpl ? tpl.naps.length : 4;
+  div.innerHTML = `
+    <h3>Slot ${i+1}${tpl ? "" : " (empty)"} <button class="clear-slot" data-idx="${i}">clear</button></h3>
+    <div class="field"><label>Label</label><input type="text" id="tplLabel${i}" value="${tpl ? escapeHtml(tpl.label) : ""}" placeholder="e.g. Template C"></div>
+    <div class="two-col">
+      <div class="field"><label>Wake Time</label><input type="text" id="tplWake${i}" value="${tpl ? escapeHtml(tpl.wake) : ""}" placeholder="7:00am"></div>
+      <div class="field"><label>Bedtime</label><input type="text" id="tplBed${i}" value="${tpl ? escapeHtml(tpl.bed) : ""}" placeholder="7:00pm"></div>
+    </div>
+    <div class="field"><label>Number of Naps</label>
+      <select id="tplNapCount${i}">
+        ${[3,4,5].map(n => `<option value="${n}" ${n===napCount?"selected":""}>${n}</option>`).join("")}
+      </select>
+    </div>
+    <div id="tplNapRows${i}"></div>
+  `;
+  const rowsContainer = div.querySelector(`#tplNapRows${i}`);
+  function renderRows(n){
+    rowsContainer.innerHTML = "";
+    for(let j=0;j<n;j++){
+      const nap = tpl && tpl.naps[j] ? tpl.naps[j] : {start:"",end:""};
+      const row = document.createElement("div");
+      row.className = "two-col";
+      row.innerHTML = `
+        <div class="field"><label>${NAP_LABELS[j]} Start</label><input type="text" id="tplNapStart${i}_${j}" value="${escapeHtml(nap.start||"")}" placeholder="8:15am"></div>
+        <div class="field"><label>${NAP_LABELS[j]} End</label><input type="text" id="tplNapEnd${i}_${j}" value="${escapeHtml(nap.end||"")}" placeholder="10:00am"></div>
+      `;
+      rowsContainer.appendChild(row);
+    }
+  }
+  renderRows(napCount);
+  div.querySelector(`#tplNapCount${i}`).addEventListener("change", (e) => renderRows(parseInt(e.target.value,10)));
+  div.querySelector(".clear-slot").addEventListener("click", () => {
+    settings.templates[i] = null;
+    renderSettingsModal();
+  });
+  return div;
+}
+
+function renderWindowSlot(i){
+  const ws = settings.windowSets[i];
+  const div = document.createElement("div");
+  div.className = "slot-block";
+  const napCount = ws ? ws.napCount : 4;
+  div.innerHTML = `
+    <h3>Wake Window Set ${i+1}${ws ? "" : " (empty)"} <button class="clear-slot" data-idx="${i}">clear</button></h3>
+    <div class="field"><label>Label</label><input type="text" id="wsLabel${i}" value="${ws ? escapeHtml(ws.label) : ""}" placeholder="e.g. 3-nap pattern"></div>
+    <div class="field"><label>Applies to nap count</label>
+      <select id="wsNapCount${i}">
+        ${[3,4,5].map(n => `<option value="${n}" ${n===napCount?"selected":""}>${n} naps</option>`).join("")}
+      </select>
+    </div>
+    <div id="wsWindows${i}" class="windows-grid"></div>
+  `;
+  const grid = div.querySelector(`#wsWindows${i}`);
+  function renderWindows(n){
+    grid.innerHTML = "";
+    const labels = [];
+    for(let j=0;j<n;j++) labels.push(j===0 ? "Wake→Nap1" : `Nap${j}→Nap${j+1}`);
+    labels.push(`Nap${n}→Bed`);
+    for(let j=0;j<=n;j++){
+      const val = ws && ws.windows[j] !== undefined ? ws.windows[j] : "";
+      const f = document.createElement("div");
+      f.className = "field";
+      f.innerHTML = `<label>${labels[j]} (hrs)</label><input type="text" id="wsWin${i}_${j}" value="${val}">`;
+      grid.appendChild(f);
+    }
+  }
+  renderWindows(napCount);
+  div.querySelector(`#wsNapCount${i}`).addEventListener("change", (e) => renderWindows(parseInt(e.target.value,10)));
+  div.querySelector(".clear-slot").addEventListener("click", () => {
+    settings.windowSets[i] = null;
+    renderSettingsModal();
+  });
+  return div;
+}
+
+function collectSettingsFromForm(){
+  const templates = [];
+  for(let i=0;i<4;i++){
+    const wake = document.getElementById(`tplWake${i}`).value.trim();
+    const bed = document.getElementById(`tplBed${i}`).value.trim();
+    if(!wake || !bed){ templates.push(null); continue; }
+    const napCount = parseInt(document.getElementById(`tplNapCount${i}`).value,10);
+    const naps = [];
+    for(let j=0;j<napCount;j++){
+      naps.push({
+        start: document.getElementById(`tplNapStart${i}_${j}`).value.trim(),
+        end: document.getElementById(`tplNapEnd${i}_${j}`).value.trim()
+      });
+    }
+    const label = document.getElementById(`tplLabel${i}`).value.trim() || `Template ${i+1}`;
+    templates.push({ label, wake, bed, naps });
+  }
+  const windowSets = [];
+  for(let i=0;i<2;i++){
+    const napCount = parseInt(document.getElementById(`wsNapCount${i}`).value,10);
+    const windows = [];
+    let any = false;
+    for(let j=0;j<=napCount;j++){
+      const v = parseFloat(document.getElementById(`wsWin${i}_${j}`).value);
+      if(!isNaN(v)) any = true;
+      windows.push(isNaN(v) ? 0 : v);
+    }
+    if(!any){ windowSets.push(null); continue; }
+    const label = document.getElementById(`wsLabel${i}`).value.trim() || `${napCount}-nap pattern`;
+    windowSets.push({ label, napCount, windows });
+  }
+  return { templates, windowSets };
+}
+
+/* ============================= Wiring ============================= */
+renderNapFields();
+
+document.getElementById("generateBtn").addEventListener("click", () => {
+  const form = readForm();
+  const errBox = document.getElementById("formErrors");
+  if(form.errors && form.errors.length){
+    errBox.innerHTML = form.errors.map(e => `<div class="error-box">${escapeHtml(e)}</div>`).join("");
+    document.getElementById("output").innerHTML = "";
+    return;
+  }
+  errBox.innerHTML = "";
+  const result = buildSchedules(form);
+  renderOutput(result);
+});
+
+document.getElementById("openSettings").addEventListener("click", () => {
+  renderSettingsModal();
+  document.getElementById("settingsOverlay").classList.add("open");
+});
+document.getElementById("closeSettings").addEventListener("click", () => {
+  document.getElementById("settingsOverlay").classList.remove("open");
+});
+document.getElementById("settingsOverlay").addEventListener("click", (e) => {
+  if(e.target.id === "settingsOverlay") document.getElementById("settingsOverlay").classList.remove("open");
+});
+document.getElementById("resetDefaults").addEventListener("click", () => {
+  settings = defaultSettings();
+  renderSettingsModal();
+});
+document.getElementById("saveSettings").addEventListener("click", () => {
+  settings = collectSettingsFromForm();
+  saveSettingsToStorage();
+  document.getElementById("settingsOverlay").classList.remove("open");
+  // re-run if a schedule is already showing
+  const form = readForm();
+  if(!form.errors || form.errors.length === 0){
+    if(document.getElementById("output").innerHTML.trim() !== ""){
+      renderOutput(buildSchedules(form));
+    }
+  }
+});
+
+})();
+</script>
+</body>
+</html>
