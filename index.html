@@ -253,6 +253,7 @@
 const NAP_LABELS = ["Nap 1","Nap 2","Nap 3","Nap 4","Nap 5"];
 const AWAKE_MIN_H = 7.5, AWAKE_MAX_H = 8.0;
 const LAST_NAP_MAX_MIN = 45;
+const NAP_MAX_MIN = 120;
 const BEDTIME_TOLERANCE_MIN = 30;
 const DAY_MIN = 6*60, DAY_MAX = 21*60; // 6:00am - 9:00pm daytime window
 
@@ -567,7 +568,7 @@ function generateCandidate(napCountTry, form, anchor){
 
   const remainingSleepTarget = dayLengthMin - totalAwakeMin - elapsedSleep;
 
-  const remainingCapped = { lastNapCapped: false, sleepShortfall: 0 };
+  const remainingCapped = { lastNapCapped: false, sleepShortfall: 0, napOverCapped: false, overCapExcess: 0 };
 
   let remainingNaps = [];
   let bedtimeMin;
@@ -606,6 +607,16 @@ function generateCandidate(napCountTry, form, anchor){
       remainingCapped.lastNapCapped = true;
     }
 
+    // enforce the 2h per-nap cap — never inflate a single nap to absorb leftover sleep need;
+    // that leftover is a signal to add another nap instead, so just cap and flag it.
+    for(let i=0;i<remDurations.length;i++){
+      if(remDurations[i] > NAP_MAX_MIN){
+        remainingCapped.overCapExcess += remDurations[i] - NAP_MAX_MIN;
+        remDurations[i] = NAP_MAX_MIN;
+        remainingCapped.napOverCapped = true;
+      }
+    }
+
     for(let i=0;i<remainingCount;i++){
       const start = prevEnd + remWindows[i];
       const end = start + remDurations[i];
@@ -627,6 +638,7 @@ function generateCandidate(napCountTry, form, anchor){
   if(remainingSleepTarget < -5){ feasible = false; reasons.push("no remaining sleep need fits"); }
   remainingNaps.forEach(n => { if(n.duration < 0){ feasible = false; reasons.push("negative nap duration"); }});
   if(remainingCapped.sleepShortfall > 20){ feasible = false; reasons.push("last-nap cap can't absorb leftover sleep"); }
+  if(remainingCapped.napOverCapped){ feasible = false; reasons.push("a nap would need to exceed the 2h cap"); }
   if(totalAwake/60 < AWAKE_MIN_H - 0.3 || totalAwake/60 > AWAKE_MAX_H + 0.3){ feasible = false; reasons.push("awake time out of range"); }
 
   return {
@@ -634,7 +646,9 @@ function generateCandidate(napCountTry, form, anchor){
     totalSleep, totalAwake, totalNapCount,
     bedDelta, feasible, reasons,
     lastNapCapped: remainingCapped.lastNapCapped,
-    sleepShortfall: remainingCapped.sleepShortfall
+    sleepShortfall: remainingCapped.sleepShortfall,
+    napOverCapped: remainingCapped.napOverCapped,
+    overCapExcess: remainingCapped.overCapExcess
   };
 }
 
@@ -767,6 +781,9 @@ function renderOutput(result){
   }
   if(primary.sleepShortfall > 5){
     warnings.push(`Today's nap(s) ran long enough that the remaining naps can't fully absorb the leftover sleep need without exceeding the 45-minute cap on the last nap. The schedule below keeps the cap and accepts a bit less total sleep instead.`);
+  }
+  if(primary.napOverCapped){
+    warnings.push(`There's more leftover sleep need than ${primary.napCountTry} reasonably-sized naps can absorb — fitting it in would have pushed a nap past the 2-hour cap. The schedule below keeps every nap ≤2h and accepts a bit less total sleep instead of an oversized nap.`);
   }
   if(!primary.feasible){
     warnings.push(`This schedule is a best-effort fit — some constraints (${primary.reasons.join(", ") || "timing"}) couldn't be fully satisfied given today's actuals.`);
