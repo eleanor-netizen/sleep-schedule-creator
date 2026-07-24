@@ -544,23 +544,26 @@ function reshapeWeights(weights, toCount){
 }
 
 /* ============================= Candidate schedule generation ============================= */
-function generateCandidate(napCountTry, form, anchor, awakeTargetH){
+function generateCandidate(napCountTry, form, anchor){
   const { wakeMin, naps, completedCount, elapsedAwake, elapsedSleep, lastEventEnd, goalBedMin } = form;
   if(napCountTry < completedCount) return null; // can't un-happen completed naps
   if(napCountTry < 3 || napCountTry > 5) return null;
 
   const fallbackWindows = blendedWindows(anchor, napCountTry);
-  const windows = pickWindowSet(napCountTry, fallbackWindows); // minutes, length napCountTry+1
+  const windows = pickWindowSet(napCountTry, fallbackWindows); // minutes, length napCountTry+1 — fixed template values, never scaled
   if(!windows || windows.length !== napCountTry+1) return null;
 
   const napDurationsFull = reshapeWeights(blendedNapDurations(anchor), napCountTry);
 
-  const totalAwakeTargetMin = awakeTargetH * 60;
+  const remainingCount = napCountTry - completedCount;
+  const remWindows = windows.slice(completedCount); // verbatim template windows, length remainingCount+1 — never scaled/compressed
+  const remainingAwakeMin = remWindows.reduce((a,b)=>a+b,0);
+  const totalAwakeMin = elapsedAwake + remainingAwakeMin; // fully determined by template windows, not a flexible target
+
   const dayLengthMin = goalBedMin !== null ? (goalBedMin - wakeMin)
     : (anchor.primary.dayLength + (anchor.secondary ? (anchor.secondary.dayLength - anchor.primary.dayLength)*anchor.weight : 0));
 
-  const remainingCount = napCountTry - completedCount;
-  const remainingSleepTarget = dayLengthMin - totalAwakeTargetMin - elapsedSleep;
+  const remainingSleepTarget = dayLengthMin - totalAwakeMin - elapsedSleep;
 
   const remainingCapped = { lastNapCapped: false, sleepShortfall: 0 };
 
@@ -569,20 +572,14 @@ function generateCandidate(napCountTry, form, anchor, awakeTargetH){
   let prevEnd = lastEventEnd;
 
   if(remainingCount === 0){
-    // all naps already happened; the entire remaining awake deficit is the final window before bed
-    bedtimeMin = prevEnd + Math.max(0, totalAwakeTargetMin - elapsedAwake);
+    // all naps already happened; the final window before bed is the template's verbatim value
+    bedtimeMin = prevEnd + remWindows[0];
     if(napCountTry < 4 && remainingSleepTarget > 20){
       // stopping below the default nap count while real sleep need remains unmet isn't a real fit —
       // this should push the search toward more naps, not fewer.
       remainingCapped.sleepShortfall += remainingSleepTarget;
     }
   } else {
-    const remWindowsRaw = windows.slice(completedCount); // length remainingCount+1
-    const rawWinSum = remWindowsRaw.reduce((a,b)=>a+b,0);
-    const desiredRemainingAwake = totalAwakeTargetMin - elapsedAwake;
-    const winScale = rawWinSum > 0 ? Math.max(0, desiredRemainingAwake) / rawWinSum : 1;
-    const remWindows = remWindowsRaw.map(w => w * winScale);
-
     let remDurations = napDurationsFull.slice(completedCount); // length remainingCount
     const rawDurSum = remDurations.reduce((a,b)=>a+b,0);
     const desiredRemainingSleep = Math.max(0, remainingSleepTarget);
@@ -635,8 +632,7 @@ function generateCandidate(napCountTry, form, anchor, awakeTargetH){
     totalSleep, totalAwake, totalNapCount,
     bedDelta, feasible, reasons,
     lastNapCapped: remainingCapped.lastNapCapped,
-    sleepShortfall: remainingCapped.sleepShortfall,
-    awakeTargetH
+    sleepShortfall: remainingCapped.sleepShortfall
   };
 }
 
@@ -654,29 +650,19 @@ function buildSchedules(form){
     return { error: "No sample schedules configured. Open settings to add at least one." };
   }
 
-  const defaultAwakeH = configuredWindowSets().find(s=>s.napCount===4)
-    ? configuredWindowSets().find(s=>s.napCount===4).windows.reduce((a,b)=>a+b,0)/60
-    : 7.75;
-
-  function tryCount(napCountTry, awakeTargetH){
-    return generateCandidate(napCountTry, form, anchor, awakeTargetH);
+  function tryCount(napCountTry){
+    return generateCandidate(napCountTry, form, anchor);
   }
 
-  // Try default awake target first for nap counts in preference order 4,3,5
+  // Try nap counts in preference order 4,3,5 — wake windows are always the template's fixed
+  // values for that nap count; only nap count and nap durations flex.
   const order = [4,3,5];
   let primary = null;
   const attempts = {};
   for(const n of order){
-    const c = tryCount(n, defaultAwakeH);
+    const c = tryCount(n);
     attempts[n] = c;
     if(c && c.feasible){ primary = c; break; }
-  }
-  if(!primary){
-    // widen awake target within band to try to rescue nap count 4
-    for(const h of [AWAKE_MIN_H, AWAKE_MAX_H]){
-      const c = tryCount(4, h);
-      if(c && c.feasible){ primary = c; break; }
-    }
   }
   if(!primary){
     // fall back to whichever attempt is "least infeasible" (first computed, count 4 preferred)
@@ -690,7 +676,7 @@ function buildSchedules(form){
   // 1. different nap count that's ALSO feasible
   for(const n of order){
     if(n === primary.napCountTry) continue;
-    const c = attempts[n] !== undefined ? attempts[n] : tryCount(n, defaultAwakeH);
+    const c = attempts[n] !== undefined ? attempts[n] : tryCount(n);
     if(c && c.feasible){
       alternates.push({ kind: "napcount", schedule: c,
         title: `${n}-Nap Variation`,
@@ -699,23 +685,7 @@ function buildSchedules(form){
     }
   }
 
-  // 2. bedtime-precision variant (adjust awake target within band) if goal given and primary has nonzero deviation
-  if(form.goalBedMin !== null && Math.abs(primary.bedDelta) > 2){
-    let best = null;
-    for(const h of [AWAKE_MIN_H, (AWAKE_MIN_H+AWAKE_MAX_H)/2, AWAKE_MAX_H]){
-      const c = tryCount(primary.napCountTry, h);
-      if(c && c.feasible && Math.abs(c.bedDelta) < Math.abs(primary.bedDelta) - 3){
-        if(!best || Math.abs(c.bedDelta) < Math.abs(best.bedDelta)) best = c;
-      }
-    }
-    if(best){
-      alternates.push({ kind: "precision", schedule: best,
-        title: "Closer to Goal Bedtime",
-        desc: "Stretches/compresses awake time slightly to land nearer your goal bedtime." });
-    }
-  }
-
-  // 3. longer/shorter last-nap variant
+  // 2. longer/shorter last-nap variant
   if(primary.remainingNaps.length > 0){
     const lastNap = primary.remainingNaps[primary.remainingNaps.length-1];
     const altTarget = lastNap.duration >= LAST_NAP_MAX_MIN - 2 ? 30 : LAST_NAP_MAX_MIN;
@@ -744,8 +714,7 @@ function buildLastNapVariant(primary, form, altLastDuration){
     remainingNaps: naps, bedtimeMin, totalSleep, totalAwake,
     totalNapCount: primary.totalNapCount,
     bedDelta: form.goalBedMin !== null ? bedtimeMin - form.goalBedMin : 0,
-    feasible: true, reasons: [], lastNapCapped: altLastDuration>=LAST_NAP_MAX_MIN, sleepShortfall: 0,
-    awakeTargetH: primary.awakeTargetH
+    feasible: true, reasons: [], lastNapCapped: altLastDuration>=LAST_NAP_MAX_MIN, sleepShortfall: 0
   };
 }
 
